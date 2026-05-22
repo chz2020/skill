@@ -1,0 +1,7 @@
+interface:
+  display_name: "RISC-V 芯片设计"
+  short_description: "RISC-V RTL 设计、验证、Yosys 逻辑综合、电路评估、物理设计 (RTL→GDSII) 基于 ICSprout55-PDK"
+  default_prompt: "Use the riscv-design skill to review this RISC-V RTL for synthesis, timing, CDC, reset, and verification risks. If synthesis is requested, use Yosys with ICSprout55-PDK."
+
+policy:
+  allow_implicit_invocation: true
