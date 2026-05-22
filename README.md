@@ -40,11 +40,11 @@
 ```bash
 # Linux / macOS
 mkdir -p ~/.claude/skills
-git clone https://github.com/<your-username>/riscv-design-skill.git ~/.claude/skills/riscv-design
+git clone https://github.com/chz2020/skill.git ~/.claude/skills/riscv-design
 
 # Windows (PowerShell)
 New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\skills"
-git clone https://github.com/<your-username>/riscv-design-skill.git "$env:USERPROFILE\.claude\skills\riscv-design"
+git clone https://github.com/chz2020/skill.git "$env:USERPROFILE\.claude\skills\riscv-design"
 ```
 
 安装完成后，重启 Claude Code 或输入 `/skills` 确认 `riscv-design` 出现在可用技能列表中。
