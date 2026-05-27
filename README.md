@@ -26,12 +26,13 @@
 |------|------|------|
 | [Claude Code](https://claude.ai/code) | Skill 运行平台 | 官方安装指南 |
 | Python 3.10+ | 脚本运行 | `python.org` 或包管理器 |
+| SSH 客户端 | VM 远程连接 (可选，推荐) | Windows: Git Bash/MSYS2 自带, Linux/macOS: 系统自带 |
 | [Yosys](https://github.com/YosysHQ/yosys) | RTL 逻辑综合 | `apt install yosys` / `pacman -S mingw-w64-x86_64-yosys` / `brew install yosys` |
 | [OpenROAD v2.0+](https://github.com/Precision-Innovations/OpenROAD/releases) | 物理设计 (仅 Linux) | Precision-Innovations 预编译 `.deb` 包 |
 | [gdstk](https://github.com/heitzmann/gdstk) | DEF → GDSII 转换 | `pip install gdstk` |
 | [KLayout](https://www.klayout.de) | GDSII 版图查看 | Windows/macOS/Linux GUI |
 
-> **注意**：OpenROAD 只有 Linux 版本。Windows 用户需搭配 Ubuntu 22.04 虚拟机完成物理设计，详见 [物理设计流程](#物理设计流程-rtlgdsii)。
+> **注意**：推荐通过 SSH 连接 Linux VM 运行 Yosys + OpenROAD。本地安装 Yosys 可作为回退方案，OpenROAD 仅 Linux 可用。
 
 ## 安装
 
@@ -40,14 +41,55 @@
 ```bash
 # Linux / macOS
 mkdir -p ~/.claude/skills
-git clone https://github.com/chz2020/skill.git ~/.claude/skills/riscv-design
+git clone https://github.com/<username>2020/skill.git ~/.claude/skills/riscv-design
 
 # Windows (PowerShell)
 New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\skills"
-git clone https://github.com/chz2020/skill.git "$env:USERPROFILE\.claude\skills\riscv-design"
+git clone https://github.com/<username>2020/skill.git "$env:USERPROFILE\.claude\skills\riscv-design"
 ```
 
 安装完成后，重启 Claude Code 或输入 `/skills` 确认 `riscv-design` 出现在可用技能列表中。
+
+## VM 远程执行配置（可选）
+
+推荐将 Yosys 综合和 OpenROAD 物理设计卸载到 Linux VM 上执行。
+
+### 每次执行时传入（推荐，不留存凭据）
+
+```bash
+# 综合
+python scripts/yosys_synth.py rtl/*.v --top RV32Top --remote \
+    --vm-host <VM_IP> --vm-user <username> -o synth_output
+
+# 物理设计
+python scripts/openroad_runner.py synth_output/netlist.v \
+    --top riscv_pd --pdk-path ~/icsprout55-pdk --remote \
+    --vm-host <VM_IP> --vm-user <username> -o physical_design/
+```
+
+### 持久化配置（可选）
+
+**环境变量**：
+```bash
+export RISCV_VM_HOST=<VM_IP>
+export RISCV_VM_USER=<username>
+```
+
+**配置文件** `~/.riscv_vm_config.json`：
+```json
+{"host": "<VM_IP>", "user": "<username>"}
+```
+
+测试连接：`python scripts/vm_runner.py check`
+
+### VM 一次性准备
+
+```bash
+ssh <username>@<VM_IP> "sudo apt install -y yosys && pip3 install gdstk"
+ssh-keygen -t rsa -b 4096
+ssh-copy-id <username>@<VM_IP>
+```
+
 
 ## 快速开始
 
@@ -103,8 +145,10 @@ riscv-design/
 ├── scripts/                          # Python 工具脚本
 │   ├── verilog_lint.py               # RTL 静态 Lint 检查器
 │   ├── tb_generator.py               # Testbench 脚手架生成器
-│   ├── yosys_synth.py                # Yosys 综合自动化脚本
-│   └── eval_circuit.py               # 电路评估与 QoR 评分
+│   ├── yosys_synth.py                # Yosys 综合自动化脚本 (支持 --remote)
+│   ├── eval_circuit.py               # 电路评估与 QoR 评分
+│   ├── vm_runner.py                  # VM SSH/SCP 远程执行基础模块
+│   └── openroad_runner.py            # OpenROAD 物理设计自动化
 ├── .claude/
 │   └── settings.local.json           # 权限配置
 └── .vscode/
@@ -166,11 +210,15 @@ python scripts/tb_generator.py src/ALU.v --uvm-skeleton
 
 ### yosys_synth.py — 一键综合
 
-自动检测 PDK、生成 Yosys 脚本、运行综合、收集报告。支持 generic 和 PDK 映射两种模式。
+自动检测 PDK、生成 Yosys 脚本、运行综合、收集报告。支持 generic 和 PDK 映射两种模式，以及本地/远程两种执行方式。
 
 ```bash
-# Generic 综合 (Yosys 内置单元)
+# 本地综合 (默认，向后兼容)
 python scripts/yosys_synth.py src/*.v --top riscv_pd -o synth_output
+
+# 远程综合 (推荐，通过 SSH 在 VM 上执行)
+python scripts/yosys_synth.py src/*.v --top riscv_pd \
+    --pdk-path ~/icsprout55-pdk --remote -o synth_output
 
 # ICSprout55 PDK 工艺映射
 python scripts/yosys_synth.py src/*.v --top riscv_pd \
@@ -192,6 +240,46 @@ python scripts/yosys_synth.py src/*.v --top riscv_pd --json -o synth_output
 - `<top>.json` — Yosys JSON 网表 (需 `--json`)
 - `yosys_log.txt` — 完整综合日志
 - `pre_synth_check.txt` — 综合前 RTL 检查
+
+### openroad_runner.py — OpenROAD 物理设计自动化
+
+自动生成 OpenROAD TCL 脚本，支持远程自动执行物理设计全流程（Floorplan → PDN → Place → CTS → Route → GDSII）。
+
+```bash
+# 本地模式：仅生成脚本
+python scripts/openroad_runner.py synth_output/riscv_pd_netlist.v \
+    --top riscv_pd --pdk-path ~/icsprout55-pdk \
+    --clk-period 5.0 -o physical_design/
+
+# 远程模式：全自动执行
+python scripts/openroad_runner.py synth_output/riscv_pd_netlist.v \
+    --top riscv_pd --pdk-path ~/icsprout55-pdk \
+    --clk-period 5.0 --remote -o physical_design/
+```
+
+**输出物** (`physical_design/`)：
+- `run_pd.tcl` — OpenROAD 物理设计 TCL 脚本
+- `def2gds.py` — gdstk DEF→GDSII 转换脚本
+- `riscv.def` / `riscv.spef` / `riscv_pnr.v` — 物理设计结果（远程模式）
+- `openroad_log.txt` — 完整 OpenROAD 日志（远程模式）
+
+### vm_runner.py — VM 远程执行基础模块
+
+提供 SSH/SCP 连接管理、文件传输、远程命令执行，被 `yosys_synth.py` 和 `openroad_runner.py` 共用。
+
+```bash
+# 测试 VM 连接
+python scripts/vm_runner.py check
+
+# 上传文件
+python scripts/vm_runner.py upload design.v <username>@<VM_IP>:~/work/
+
+# 下载文件
+python scripts/vm_runner.py download <username>@<VM_IP>:~/work/output.def ./
+
+# 执行远程命令
+python scripts/vm_runner.py run "yosys --version"
+```
 
 ### eval_circuit.py — 电路评估
 
@@ -218,7 +306,16 @@ python scripts/eval_circuit.py synth_output_v1 --compare synth_output_v2
 
 ## 物理设计流程 (RTL→GDSII)
 
-完整流程已通过 **ICSprout55 55nm (1P6M)** 工艺端到端验证。详细指南见 `references/physical-design.md`。
+完整流程已通过 **ICSprout55 55nm (1P6M)** 工艺端到端验证。
+
+### 一键自动流程（推荐）
+
+```bash
+# 在 VM 上自动完成物理设计
+python scripts/openroad_runner.py synth_output/riscv_pd_netlist.v \
+    --top riscv_pd --pdk-path ~/icsprout55-pdk \
+    --clk-period 5.0 --remote -o physical_design/
+```
 
 ### 架构概览
 

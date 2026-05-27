@@ -23,6 +23,39 @@ description: "RISC-V 处理器 RTL 设计、验证、Yosys 逻辑综合、电路
 
 ## 工作流程
 
+### 0. VM 远程连接
+
+Yosys 综合和 OpenROAD 物理设计**推荐在 Linux VM 上远程执行**——统一的 Linux 环境兼容性最好。本地执行作为回退方案。
+
+**交互方式**：当用户请求综合或物理设计时，Skill 会询问 VM 连接信息。用户通过 CLI 参数传入，不留存任何凭据：
+
+```bash
+# 每次执行时通过 --vm-host / --vm-user 传入 VM 地址
+python scripts/yosys_synth.py rtl/*.v --top RV32Top --remote \
+    --vm-host <VM_IP> --vm-user <username> -o synth_output
+```
+
+**可选持久化配置**（仅在用户明确要求时使用）：
+
+- 环境变量: `RISCV_VM_HOST`, `RISCV_VM_USER`, `RISCV_VM_PORT`, `RISCV_VM_KEY`, `RISCV_VM_WORK_DIR`
+- 配置文件: `~/.riscv_vm_config.json` — `{"host": "<VM_IP>", "user": "<username>"}`
+
+**VM 环境准备**（一次性）：
+```bash
+ssh <username>@<VM_IP> "sudo apt install -y yosys"
+ssh <username>@<VM_IP> "pip3 install gdstk"
+# OpenROAD 需从 Precision-Innovations 下载预编译 .deb 包安装
+
+# 配置 SSH 免密登录
+ssh-keygen -t rsa -b 4096
+ssh-copy-id <username>@<VM_IP>
+```
+
+**测试连接**：
+```bash
+python scripts/vm_runner.py check --vm-host <VM_IP> --vm-user <username>
+```
+
 ### 1. 理解需求
 
 识别需要哪种能力。常见信号：
@@ -93,6 +126,31 @@ description: "RISC-V 处理器 RTL 设计、验证、Yosys 逻辑综合、电路
 
 当用户要求综合时：
 
+#### 7.1 远程综合（推荐）
+
+先确认 VM 连接已配置（见步骤 0），然后使用 `--remote`：
+
+```bash
+# 远程综合 (ICSprout55 PDK 工艺映射)
+python scripts/yosys_synth.py rtl/*.v --top RV32Top \
+    --pdk-path ~/icsprout55-pdk --clk-period 10.0 \
+    --remote -o synth_output
+
+# 远程综合 (无 PDK, generic 门级映射)
+python scripts/yosys_synth.py rtl/*.v --top RV32Top \
+    --remote -o synth_output
+
+# 含大 Block RAM 的设计
+python scripts/yosys_synth.py rtl/*.v --top RV32Top \
+    --keep-hierarchy --remote -o synth_output
+```
+
+**自动完成**：上传 RTL → VM 运行 Yosys → 下载网表/报告 → 本地目录。
+
+若 VM 不可达，脚本会提示并询问是否回退到本地执行。使用 `--no-fallback` 可禁止回退。
+
+#### 7.2 本地综合（回退）
+
 1. **确认顶层模块名和所有 RTL 文件**
 2. **综合前 RTL 检查** — 脚本自动扫描综合常见陷阱：
    - 系统任务 (`$display`/`$readmemh`/`$monitor`) 未被 translate_off 包裹
@@ -147,6 +205,32 @@ description: "RISC-V 处理器 RTL 设计、验证、Yosys 逻辑综合、电路
 
 当用户要求物理设计时：
 
+#### 9.1 自动远程流程（推荐）
+
+```bash
+# 综合后一键物理设计
+python scripts/openroad_runner.py synth_output/riscv_pd_netlist.v \
+    --top riscv_pd --pdk-path ~/icsprout55-pdk \
+    --clk-period 5.0 --remote -o physical_design/
+```
+
+**自动完成**：上传网表+PDK → VM 运行 OpenROAD (Floorplan→PDN→Place→CTS→Route→Filler) → 下载 DEF/SPEF/报告。
+
+**后续步骤**：
+```bash
+# 生成 GDSII 版图（gdstk）
+python physical_design/def2gds.py
+
+# 用 KLayout 查看
+klayout physical_design/riscv.gds
+```
+
+#### 9.2 本地生成脚本（手动执行）
+
+不指定 `--remote` 时，仅生成 OpenROAD TCL 脚本和 def2gds 转换脚本到输出目录，打印手动执行说明。
+
+#### 9.3 物理设计详细流程
+
 1. **加载** `references/physical-design.md` 和 `references/yosys-synthesis.md`
 2. **确认工作环境**：
    - OpenROAD 只有 Linux 版本 — 若用户在 Windows，需 Ubuntu 22.04 VM
@@ -192,8 +276,10 @@ description: "RISC-V 处理器 RTL 设计、验证、Yosys 逻辑综合、电路
 | `references/asic-design-flow.md` | ASIC 流程参考 (SDC/CDC/DFT/STA) | 物理设计、时序问题 |
 | `scripts/verilog_lint.py` | RTL 静态分析 | 代码审查 |
 | `scripts/tb_generator.py` | Testbench 脚手架 | Testbench 创建 |
-| `scripts/yosys_synth.py` | Yosys 综合脚本 (含综合前检查) | **逻辑综合** |
+| `scripts/yosys_synth.py` | Yosys 综合脚本 (支持 --remote) | **逻辑综合** |
 | `scripts/eval_circuit.py` | 电路评估 / QoR | **电路评估** |
+| `scripts/vm_runner.py` | VM SSH/SCP 远程执行基础模块 | 远程综合 / 远程物理设计 |
+| `scripts/openroad_runner.py` | OpenROAD 物理设计自动化 (支持 --remote) | **物理设计** |
 | `scripts/verilog_lint.py` 的 A11/A12/B9/B10 规则 | 综合专项 Lint | 综合前 RTL 检查 |
 
 ## RISC-V ISA 快速参考

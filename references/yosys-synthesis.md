@@ -60,22 +60,22 @@ brew install yosys
 # 文件: synth_flat.ys
 
 # 1. 读入所有 RTL 文件 (使用绝对路径或相对路径)
-read_verilog -nomeminit -I E:/kouchi/riscv_design/riscv_design/src \
-  E:/kouchi/riscv_design/riscv_design/src/ALU.v \
-  E:/kouchi/riscv_design/riscv_design/src/ControlUnit.v \
-  E:/kouchi/riscv_design/riscv_design/src/DM.v \
-  E:/kouchi/riscv_design/riscv_design/src/EXT.v \
-  E:/kouchi/riscv_design/riscv_design/src/Flopr.v \
-  E:/kouchi/riscv_design/riscv_design/src/IM.v \
-  E:/kouchi/riscv_design/riscv_design/src/IR.v \
-  E:/kouchi/riscv_design/riscv_design/src/MUX_2to1_A.v \
-  E:/kouchi/riscv_design/riscv_design/src/MUX_3to1.v \
-  E:/kouchi/riscv_design/riscv_design/src/MUX_3to1_B.v \
-  E:/kouchi/riscv_design/riscv_design/src/MUX_3to1_LMD.v \
-  E:/kouchi/riscv_design/riscv_design/src/NPC.v \
-  E:/kouchi/riscv_design/riscv_design/src/PC.v \
-  E:/kouchi/riscv_design/riscv_design/src/RF.v \
-  E:/kouchi/riscv_design/riscv_design/src/riscv_pd.v
+read_verilog -nomeminit -I <local_project_path>/src \
+  <local_project_path>/src/ALU.v \
+  <local_project_path>/src/ControlUnit.v \
+  <local_project_path>/src/DM.v \
+  <local_project_path>/src/EXT.v \
+  <local_project_path>/src/Flopr.v \
+  <local_project_path>/src/IM.v \
+  <local_project_path>/src/IR.v \
+  <local_project_path>/src/MUX_2to1_A.v \
+  <local_project_path>/src/MUX_3to1.v \
+  <local_project_path>/src/MUX_3to1_B.v \
+  <local_project_path>/src/MUX_3to1_LMD.v \
+  <local_project_path>/src/NPC.v \
+  <local_project_path>/src/PC.v \
+  <local_project_path>/src/RF.v \
+  <local_project_path>/src/riscv_pd.v
 
 # 2. 建立层次
 hierarchy -check -top riscv_pd
@@ -100,18 +100,18 @@ opt_clean
 check
 
 # 7. 统计报告
-tee -q -o E:/kouchi/riscv_design/riscv_design/physical_design/post_map_stat.txt \
+tee -q -o <local_project_path>/physical_design/post_map_stat.txt \
     stat -liberty C:/Users/24183/icsprout55-pdk/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CL/liberty/ics55_LLSC_H7CL_ss_rcworst_1p08_125_nldm.lib
 
 # 8. 输出扁平网表
-write_verilog -noexpr -noattr E:/kouchi/riscv_design/riscv_design/physical_design/riscv_flat_netlist.v
+write_verilog -noexpr -noattr <local_project_path>/physical_design/riscv_flat_netlist.v
 ```
 
 ### 运行
 
 ```bash
 # Windows MSYS2
-cd "E:/kouchi/riscv_design/riscv_design/physical_design"
+cd "<local_project_path>/physical_design"
 yosys synth_flat.ys
 ```
 
@@ -223,8 +223,8 @@ echo "Synthesis Complete"
 
 Yosys 可能无法正确处理中文路径。建议将工作目录改名为纯 ASCII:
 ```bash
-# ❌ E:\叩持\riscv_design\  — 可能编码问题
-# ✅ E:\kouchi\riscv_design\ — 正常工作
+# ❌ E:\中文路径\riscv_design\  — 可能编码问题
+# ✅ E:\project\riscv_design\ — 正常工作
 ```
 
 ## 综合优化策略

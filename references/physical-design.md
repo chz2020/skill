@@ -56,11 +56,11 @@ pip3 install gdstk
 ssh-keygen -t rsa -b 4096
 
 # 复制公钥到 VM
-ssh-copy-id chz@192.168.164.132
+ssh-copy-id <username>@<VM_IP>
 
 # 配置 sudo 免密 (在 VM 上)
 sudo visudo
-# 添加: chz ALL=(ALL) NOPASSWD:ALL
+# 添加: <username> ALL=(ALL) NOPASSWD:ALL
 ```
 
 ## 2. PDK 目录结构 (实际)
@@ -93,8 +93,8 @@ sudo visudo
 # 标准单元: ics55_LLSC_H7CL (LVT, 7-track, CoreSite: 0.2x1.4 um)
 # =============================================================================
 
-set script_dir "/home/chz/design"
-set pdk_base "/home/chz/pdk"
+set script_dir "/home/<username>/design"
+set pdk_base "/home/<username>/pdk"
 set std_lib "$pdk_base/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CL"
 set tech_dir "$pdk_base/prtech/techLEF"
 
@@ -249,13 +249,13 @@ lib.write_gds("~/design/outputs/riscv.gds")
 
 ```bash
 # Windows → VM (推送文件)
-scp "E:/path/to/file" chz@192.168.164.132:~/design/
+scp "E:/path/to/file" <username>@<VM_IP>:~/design/
 
 # VM → Windows (拉取结果)
-scp "chz@192.168.164.132:~/design/outputs/riscv.gds" "E:/kouchi/riscv_design/riscv_design/physical_design/outputs/"
+scp "<username>@<VM_IP>:~/design/outputs/riscv.gds" "<local_project_path>/physical_design/outputs/"
 
 # 批量传输目录
-scp -r "C:/path/to/libs/" chz@192.168.164.132:~/pdk/
+scp -r "C:/path/to/libs/" <username>@<VM_IP>:~/pdk/
 ```
 
 ## 6. 常见错误与修复

@@ -4,7 +4,11 @@
       "Bash(python -c \"import py_compile; py_compile.compile('C:/Users/24183/.claude/skills/riscv-design/scripts/verilog_lint.py', doraise=True); print('verilog_lint.py OK')\")",
       "Bash(python -c \"import py_compile; py_compile.compile('C:/Users/24183/.claude/skills/riscv-design/scripts/tb_generator.py', doraise=True); print('tb_generator.py OK')\")",
       "Bash(python -c \"import py_compile; py_compile.compile('C:/Users/24183/.claude/skills/riscv-design/scripts/yosys_synth.py', doraise=True); print('yosys_synth.py OK')\")",
-      "Bash(python -c \"import py_compile; py_compile.compile('C:/Users/24183/.claude/skills/riscv-design/scripts/eval_circuit.py', doraise=True); print('eval_circuit.py OK')\")"
+      "Bash(python -c \"import py_compile; py_compile.compile('C:/Users/24183/.claude/skills/riscv-design/scripts/eval_circuit.py', doraise=True); print('eval_circuit.py OK')\")",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(ssh-keygen *)",
+      "Bash(ssh-copy-id *)"
     ]
   }
 }

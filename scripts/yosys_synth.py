@@ -350,9 +350,99 @@ def main():
     parser.add_argument("--keep-hierarchy", action="store_true",
                         help="保留模块层次结构，不执行 flatten（含大量存储器的设计推荐启用）")
     parser.add_argument("--verbose", "-v", action="store_true", help="详细输出")
+    parser.add_argument("--remote", action="store_true",
+                        help="通过 SSH 在远程 VM 上运行 Yosys（推荐，需先配置 VM 连接）")
+    parser.add_argument("--vm-host", default=None, help="VM 主机名/IP（覆盖环境变量 RISCV_VM_HOST）")
+    parser.add_argument("--vm-user", default=None, help="VM SSH 用户名（覆盖环境变量 RISCV_VM_USER）")
+    parser.add_argument("--vm-port", type=int, default=None, help="VM SSH 端口（覆盖环境变量 RISCV_VM_PORT）")
+    parser.add_argument("--vm-key", default=None, help="SSH 私钥路径（覆盖环境变量 RISCV_VM_KEY）")
+    parser.add_argument("--vm-work-dir", default=None, help="VM 远程工作目录（覆盖环境变量 RISCV_VM_WORK_DIR）")
+    parser.add_argument("--no-fallback", action="store_true",
+                        help="远程综合失败时不回退到本地 Yosys")
     args = parser.parse_args()
     _verbose = args.verbose
 
+    # === 远程综合路径 ===
+    if args.remote:
+        try:
+            from vm_runner import (get_vm_config, check_ssh_connection,
+                                   remote_yosys_synth, scp_upload, ssh_run,
+                                   create_remote_temp_dir)
+        except ImportError:
+            print("[错误] 无法导入 vm_runner 模块，请确认 scripts/vm_runner.py 存在。")
+            sys.exit(1)
+
+        config = get_vm_config(
+            vm_host=args.vm_host,
+            vm_user=args.vm_user,
+            vm_port=args.vm_port,
+            vm_key=args.vm_key,
+            vm_work_dir=args.vm_work_dir,
+        )
+        if config.get("_error"):
+            print(config["_message"])
+            sys.exit(1)
+
+        ok, msg = check_ssh_connection(config)
+        if not ok:
+            print(f"[错误] 无法连接到 VM: {msg}")
+            if args.no_fallback:
+                sys.exit(1)
+            print("[信息] 回退到本地 Yosys ...\n")
+        else:
+            # 解析 liberty 路径（本地 PDK 路径 → 上传到 VM）
+            liberty_local = None
+            if args.pdk_path:
+                liberty_local = _pick_best_liberty(Path(args.pdk_path))
+                if liberty_local:
+                    print(f"[信息] 找到 liberty 文件: {liberty_local}")
+            else:
+                auto_pdk, auto_lib = auto_find_pdk()
+                if auto_pdk:
+                    liberty_local = auto_lib
+                    print(f"[信息] 自动发现 PDK: {auto_pdk}")
+
+            # 生成综合脚本（使用本地路径，vm_runner 会替换为远程路径）
+            output_dir = Path(args.output_dir)
+            script_content = generate_yosys_script(
+                args.top, args.rtl_files, liberty_local,
+                args.clk_period, output_dir,
+                keep_hierarchy=args.keep_hierarchy,
+            )
+
+            # 上传 liberty 文件（如有）
+            if liberty_local:
+                remote_dir = create_remote_temp_dir(config)
+                if remote_dir:
+                    remote_pdk_dir = f"{remote_dir}/pdk"
+                    ssh_run(config, f"mkdir -p {remote_pdk_dir}", timeout=10, verbose=False)
+                    scp_upload(config, liberty_local, f"{remote_pdk_dir}/")
+                    # 替换脚本中的本地 liberty 路径为远程路径
+                    remote_liberty = f"{remote_pdk_dir}/{Path(liberty_local).name}"
+                    script_content = script_content.replace(
+                        str(Path(liberty_local).resolve()).replace('\\', '/'), remote_liberty
+                    )
+                    script_content = script_content.replace(
+                        str(liberty_local), remote_liberty
+                    )
+
+            retcode, _ = remote_yosys_synth(
+                config, args.rtl_files, script_content,
+                args.output_dir, verbose=args.verbose,
+            )
+            if retcode == 0:
+                print("\n[信息] 远程综合完成。")
+                print(f"  结果目录: {args.output_dir}")
+                print(f"  运行 eval_circuit.py {args.output_dir} 进行电路评估。")
+                sys.exit(0)
+            else:
+                print(f"\n[警告] 远程综合失败 (exit={retcode})")
+                if not args.no_fallback:
+                    print("[信息] 回退到本地 Yosys ...\n")
+                else:
+                    sys.exit(retcode)
+
+    # === 本地综合路径 ===
     # 1. 检查 Yosys
     yosys_bin = find_yosys()
     if not yosys_bin:
@@ -361,6 +451,7 @@ def main():
         print("  安装: https://github.com/YosysHQ/yosys")
         print("  Windows: 可通过 MSYS2 安装: pacman -S mingw-w64-x86_64-yosys")
         print("  Linux:   apt install yosys / brew install yosys")
+        print("  或使用 --remote 在 VM 上运行综合。")
         print("=" * 60)
         sys.exit(1)
     print(f"[信息] Yosys: {yosys_bin}")
